@@ -1,0 +1,47 @@
+name: Vercel Production Deployment
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  Deploy-Production:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+      - uses: actions/cache@v3
+        id: tailscale-go-cache
+        with:
+          path: ~/.cache
+          key: ${{ runner.os }}-tailscale-go-2-${{ hashFiles('tailscale/go.mod', 'tailscale/tool/yarn.rev', 'tailscale/tool/node.rev', 'tailscale/tool/binaryen.rev') }}
+      - name: Build tsconnect package
+        run: |
+          cd tailscale
+          ./tool/go run ./cmd/tsconnect build-pkg
+      - name: Get yarn cache directory
+        id: yarn-cache-dir
+        shell: bash
+        run: echo "dir=$(yarn cache dir)" >> ${GITHUB_OUTPUT}
+      - uses: actions/cache@v3
+        id: yarn-cache # use this to check for `cache-hit` ==> if: steps.yarn-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.yarn-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - name: Install deps
+        run: yarn install
+      - name: Pull Vercel Environment Information
+        run: yarn vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build Project Artifacts
+        run: yarn vercel build --prod  --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy Project Artifacts to Vercel
+        id: vercel-deploy
+        run: yarn -s vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
