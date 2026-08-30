@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "cd tailscale && ./tool/go run ./cmd/tsconnect build-pkg",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
